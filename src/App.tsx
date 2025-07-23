@@ -1,5 +1,4 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import Navbar from './components/Navbar';
@@ -29,18 +28,9 @@ function App() {
   return (
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
-        <Router>
-          <Routes>
-            <Route
-              path="/"
-              element={
-                <AppLayout>
-                  <LaptopInventory />
-                </AppLayout>
-              }
-            />
-          </Routes>
-        </Router>
+        <AppLayout>
+          <LaptopInventory />
+        </AppLayout>
       </QueryClientProvider>
     </ThemeProvider>
   );
