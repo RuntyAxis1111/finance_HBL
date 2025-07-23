@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Equipo, uploadPDF } from '../../lib/supabaseClient';
+import { Equipo, uploadPDF, getEquiposWithDepreciation } from '../../lib/supabaseClient';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -9,8 +9,11 @@ import {
   DocumentArrowUpIcon,
   CheckIcon,
   ExclamationTriangleIcon,
-  DocumentIcon
+  DocumentIcon,
+  ArrowDownTrayIcon,
+  InformationCircleIcon
 } from '@heroicons/react/24/outline';
+import dayjs from 'dayjs';
 
 interface InventoryTableProps {
   equipos: Equipo[];
@@ -76,6 +79,52 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
       equipo.company.toLowerCase().includes(term)
     );
   }, [equipos, searchTerm]);
+
+  const downloadCSV = async () => {
+    try {
+      // Get equipment data with depreciation
+      const equiposWithDepreciation = await getEquiposWithDepreciation();
+      
+      if (!equiposWithDepreciation || equiposWithDepreciation.length === 0) return;
+
+      // Create CSV content with proper headers and data formatting
+      const csvContent = [
+        [
+          'serial_number', 'model', 'company', 'assigned_to', 'insured', 
+          'purchase_date', 'purchase_cost', 'depreciation_y1', 'depreciation_y2', 
+          'depreciation_y3', 'depreciation_y4', 'depreciation_y5', 'valor_libro', 'file_url'
+        ],
+        ...equiposWithDepreciation.map(item => [
+          item.serial_number || '',
+          MODEL_LABELS[item.model as keyof typeof MODEL_LABELS] || item.model,
+          item.company || '',
+          item.assigned_to || '',
+          item.insured ? 'true' : 'false',
+          item.purchase_date || '',
+          item.purchase_cost?.toString() || '',
+          item.depreciation_y1?.toFixed(2) || '0.00',
+          item.depreciation_y2?.toFixed(2) || '0.00',
+          item.depreciation_y3?.toFixed(2) || '0.00',
+          item.depreciation_y4?.toFixed(2) || '0.00',
+          item.depreciation_y5?.toFixed(2) || '0.00',
+          item.valor_libro?.toFixed(2) || '0.00',
+          item.file_url || ''
+        ])
+      ].map(row => row.join(',')).join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `equipos_depreciacion_${dayjs().format('YYYY-MM-DD')}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error downloading CSV:', error);
+    }
+  };
 
   const handleCellEdit = (serial: string, field: keyof Equipo, currentValue: any) => {
     setEditingCell({ serial, field });
@@ -388,6 +437,23 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
             />
           </div>
           
+          {/* Download CSV */}
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={downloadCSV}
+              className="flex items-center space-x-2 px-4 py-2 rounded-lg border transition-colors"
+              style={{
+                borderColor: theme.tableBorder,
+                color: theme.textPrimary
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = theme.surfaceAlt)}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              <ArrowDownTrayIcon className="h-4 w-4" />
+              <span>CSV con Depreciación</span>
+            </button>
+          </div>
+          
           {/* Create button */}
           <button
             onClick={() => setShowCreateForm(true)}
@@ -428,6 +494,27 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
                 Costo de Compra
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
+                Dep. Año 1
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
+                Dep. Año 2
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
+                Dep. Año 3
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
+                Dep. Año 4
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
+                Dep. Año 5
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
+                <div className="flex items-center space-x-1">
+                  <span>Valor Libro</span>
+                  <InformationCircleIcon className="h-4 w-4" style={{ color: theme.textSecondary }} />
+                </div>
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
                 Factura PDF
               </th>
             </tr>
@@ -464,6 +551,37 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
                 </td>
                 <td className="px-4 py-3 text-sm" style={{ color: theme.textPrimary }}>
                   {renderEditableCell(equipo, 'purchase_cost', equipo.purchase_cost)}
+                </td>
+                <td className="px-4 py-3 text-sm" style={{ color: theme.danger }}>
+                  ${(equipo.depreciation_y1 || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </td>
+                <td className="px-4 py-3 text-sm" style={{ color: theme.danger }}>
+                  ${(equipo.depreciation_y2 || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </td>
+                <td className="px-4 py-3 text-sm" style={{ color: theme.danger }}>
+                  ${(equipo.depreciation_y3 || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </td>
+                <td className="px-4 py-3 text-sm" style={{ color: theme.danger }}>
+                  ${(equipo.depreciation_y4 || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </td>
+                <td className="px-4 py-3 text-sm" style={{ color: theme.danger }}>
+                  ${(equipo.depreciation_y5 || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </td>
+                <td className="px-4 py-3 text-sm">
+                  <div className="flex items-center space-x-2">
+                    <span 
+                      className="font-semibold"
+                      style={{ color: theme.success }}
+                      title={`Tasa ${((equipo.depreciation_rate || 0) * 100).toFixed(0)}% • ${equipo.years_elapsed || 0} años transcurridos`}
+                    >
+                      ${(equipo.valor_libro || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </span>
+                    <InformationCircleIcon 
+                      className="h-4 w-4 cursor-help" 
+                      style={{ color: theme.textSecondary }}
+                      title={`Tasa ${((equipo.depreciation_rate || 0) * 100).toFixed(0)}% • ${equipo.years_elapsed || 0} años transcurridos`}
+                    />
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-sm" style={{ color: theme.textPrimary }}>
                   <div className="flex items-center space-x-2">
