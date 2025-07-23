@@ -13,7 +13,6 @@ export interface Equipo {
   insured: boolean;
   purchase_date: string | null;
   purchase_cost: number | null;
-  depr_rate: number | null;
   created_at: string;
   updated_at: string;
   file_url: string | null;
