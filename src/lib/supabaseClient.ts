@@ -37,14 +37,14 @@ export interface DepreciacionData {
 
 // Función para obtener equipos con datos de depreciación en tiempo real
 export const getEquiposWithDepreciation = async (): Promise<Equipo[]> => {
-  // Obtener equipos con depreciación en tiempo real
-  const { data: equiposLive, error: liveError } = await supabase
-    .from('equipos_depreciacion_live')
-    .select('*')
+  // Obtener equipos con depreciación usando la vista v2
+  const { data: equiposDepreciacion, error: depError } = await supabase
+    .from('equipos_depreciacion_v2')
+    .select('serial_number, purchase_cost, purchase_date, model, year_number, rate, residual_pct, depreciation_year, book_value_end_year')
     .order('serial_number', { ascending: true });
   
-  if (liveError) throw liveError;
-  if (!equiposLive) return [];
+  if (depError) throw depError;
+  if (!equiposDepreciacion) return [];
 
   // Obtener datos adicionales de equipos_ti que no están en la vista live
   const { data: equiposBase, error: baseError } = await supabase
@@ -54,39 +54,57 @@ export const getEquiposWithDepreciation = async (): Promise<Equipo[]> => {
   
   if (baseError) throw baseError;
 
-  // Obtener datos de depreciación por años (para columnas Año 1-5)
-  const { data: depreciacionData, error: depError } = await supabase
-    .from('equipos_depreciacion_v2')
-    .select('serial_number, year_number, depreciation_year')
-    .order('serial_number')
-    .order('year_number');
-  
-  if (depError) throw depError;
+  // Agrupar datos de depreciación por serial_number
+  const equiposGrouped = equiposDepreciacion.reduce((acc, item) => {
+    if (!acc[item.serial_number]) {
+      acc[item.serial_number] = {
+        serial_number: item.serial_number,
+        model: item.model,
+        purchase_date: item.purchase_date,
+        purchase_cost: item.purchase_cost,
+        rate: item.rate,
+        residual_pct: item.residual_pct,
+        depreciation_year: item.depreciation_year,
+        years_by_number: {}
+      };
+    }
+    acc[item.serial_number].years_by_number[item.year_number] = item;
+    return acc;
+  }, {} as Record<string, any>);
 
   // Combinar todos los datos
-  return equiposLive.map(equipoLive => {
-    const equipoBase = equiposBase?.find(e => e.serial_number === equipoLive.serial_number);
-    const equipoDepreciation = (depreciacionData || []).filter(d => d.serial_number === equipoLive.serial_number);
+  return Object.values(equiposGrouped).map(equipoData => {
+    const equipoBase = equiposBase?.find(e => e.serial_number === equipoData.serial_number);
     
-    // Calcular años transcurridos (enteros para referencia)
-    const yearsElapsed = equipoLive.purchase_date 
-      ? Math.min(5, Math.floor((new Date().getTime() - new Date(equipoLive.purchase_date).getTime()) / (1000 * 60 * 60 * 24 * 365)))
+    // Calcular años transcurridos exactos (con decimales)
+    const yearsExact = equipoData.purchase_date 
+      ? Math.min(5, (new Date().getTime() - new Date(equipoData.purchase_date).getTime()) / (1000 * 60 * 60 * 24 * 365))
       : 0;
     
-    // Obtener depreciaciones por año
-    const depreciation_y1 = equipoDepreciation.find(d => d.year_number === 1)?.depreciation_year || 0;
-    const depreciation_y2 = equipoDepreciation.find(d => d.year_number === 2)?.depreciation_year || 0;
-    const depreciation_y3 = equipoDepreciation.find(d => d.year_number === 3)?.depreciation_year || 0;
-    const depreciation_y4 = equipoDepreciation.find(d => d.year_number === 4)?.depreciation_year || 0;
-    const depreciation_y5 = equipoDepreciation.find(d => d.year_number === 5)?.depreciation_year || 0;
+    // Calcular años transcurridos (enteros para referencia)
+    const yearsElapsed = Math.floor(yearsExact);
     
+    // Calcular valor libro en tiempo real
+    const bookValueToday = equipoData.purchase_cost && equipoData.rate
+      ? Math.max(
+          equipoData.purchase_cost - (equipoData.purchase_cost * equipoData.rate * yearsExact),
+          equipoData.purchase_cost * equipoData.residual_pct
+        )
+      : equipoData.purchase_cost || 0;
+    
+    // Obtener depreciaciones por año
+    const depreciation_y1 = equipoData.years_by_number[1]?.depreciation_year || 0;
+    const depreciation_y2 = equipoData.years_by_number[2]?.depreciation_year || 0;
+    const depreciation_y3 = equipoData.years_by_number[3]?.depreciation_year || 0;
+    const depreciation_y4 = equipoData.years_by_number[4]?.depreciation_year || 0;
+    const depreciation_y5 = equipoData.years_by_number[5]?.depreciation_year || 0;
 
     return {
       // Datos base del equipo
-      serial_number: equipoLive.serial_number,
-      model: equipoLive.model,
-      purchase_date: equipoLive.purchase_date,
-      purchase_cost: equipoLive.purchase_cost,
+      serial_number: equipoData.serial_number,
+      model: equipoData.model,
+      purchase_date: equipoData.purchase_date,
+      purchase_cost: equipoData.purchase_cost,
       company: equipoBase?.company || 'AJA',
       assigned_to: equipoBase?.assigned_to || null,
       insured: equipoBase?.insured || false,
@@ -95,9 +113,9 @@ export const getEquiposWithDepreciation = async (): Promise<Equipo[]> => {
       updated_at: equipoBase?.updated_at,
       
       // Datos de depreciación en tiempo real
-      rate: equipoLive.rate,
-      book_value_today: equipoLive.book_value_today,
-      years_exact: equipoLive.years_exact,
+      rate: equipoData.rate,
+      book_value_today: bookValueToday,
+      years_exact: yearsExact,
       
       // Depreciaciones por año (fijas)
       depreciation_y1,
