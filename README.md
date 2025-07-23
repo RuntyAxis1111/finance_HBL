@@ -1,6 +1,6 @@
-# HYBE Latin America Microsite
+# HYBE LATAM FEED FINANCE
 
-Una aplicación web moderna para el equipo de HYBE Latin America, construida con React, TypeScript, Tailwind CSS y Supabase.
+Una aplicación web para la gestión financiera de equipos TI de HYBE Latin America, construida con React, TypeScript, Tailwind CSS y Supabase.
 
 ## 🚀 Despliegue en Vercel
 
@@ -57,22 +57,18 @@ npm run preview
 
 ```
 src/
-├── components/          # Componentes React
-│   ├── sections/       # Secciones de la página
-│   ├── ui/            # Componentes UI reutilizables
-│   └── Sidebar.tsx    # Navegación lateral
-├── hooks/              # Custom React hooks
+├── components/         # Componentes React
+│   └── equipos/       # Componentes específicos de equipos TI
 ├── lib/               # Configuración de librerías
-└── styles/            # Estilos globales
+├── contexts/          # Contextos de React
+└── pages/             # Páginas de la aplicación
 ```
 
 ## 🗄️ Base de Datos
 
-La aplicación utiliza Supabase como backend. Las tablas principales incluyen:
+La aplicación utiliza Supabase como backend. La tabla principal es:
 
-- `vacation_requests` - Solicitudes de vacaciones
-- `travel_notifications` - Notificaciones de viaje
-- `it_equipment_requests` - Solicitudes de equipo IT
+- `equipos_ti` - Inventario de equipos de tecnología
 
 ## 🎨 Tecnologías
 
@@ -88,12 +84,12 @@ La aplicación utiliza Supabase como backend. Las tablas principales incluyen:
 ## 📱 Características
 
 - ✅ Diseño responsive
-- ✅ Navegación suave
-- ✅ Formularios interactivos
+- ✅ Gestión de inventario de equipos TI
+- ✅ Gráficas y análisis financiero
 - ✅ Integración con Supabase
 - ✅ Animaciones fluidas
-- ✅ Accesibilidad (a11y)
-- ✅ SEO optimizado
+- ✅ Tablas editables en tiempo real
+- ✅ Carga de archivos PDF
 
 ## 🔧 Configuración de Vercel
 
@@ -105,8 +101,8 @@ El archivo `vercel.json` incluye:
 
 ## 🔒 Seguridad
 
-Las credenciales de Supabase están embebidas directamente en el código para simplificar el despliegue. Esto es seguro para claves anónimas (anon key) ya que están diseñadas para ser públicas y están protegidas por Row Level Security (RLS) en Supabase.
+Las credenciales de Supabase están embebidas directamente en el código para simplificar el despliegue. Esto es seguro para claves de servicio ya que están protegidas por Row Level Security (RLS) en Supabase.
 
 ## 📞 Soporte
 
-Para soporte técnico o preguntas sobre el proyecto, contacta al equipo de desarrollo.
+Para soporte técnico o preguntas sobre el sistema financiero, contacta al equipo de finanzas.
