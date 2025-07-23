@@ -162,18 +162,18 @@ const ChartsDashboard: React.FC = () => {
 
   const downloadCSV = async () => {
     try {
-      // Get all equipment data for full inventory export
-      const { data: equipos, error } = await supabase
-        .from('equipos_ti')
-        .select('serial_number, model, company, assigned_to, insured, purchase_date, purchase_cost, file_url')
-        .order('serial_number');
+      // Get equipment data with depreciation using the function
+      const equipos = await getEquiposWithDepreciation();
       
-      if (error) throw error;
       if (!equipos || equipos.length === 0) return;
 
       // Create CSV content with proper headers and data formatting
       const csvContent = [
-        ['serial_number', 'model', 'company', 'assigned_to', 'insured', 'purchase_date', 'purchase_cost', 'file_url'],
+        [
+          'serial_number', 'model', 'company', 'assigned_to', 'insured', 
+          'purchase_date', 'purchase_cost', 'depreciation_y1', 'depreciation_y2', 
+          'depreciation_y3', 'depreciation_y4', 'depreciation_y5', 'valor_libro', 'file_url'
+        ],
         ...equipos.map(item => [
           item.serial_number || '',
           MODEL_LABELS[item.model as keyof typeof MODEL_LABELS] || item.model,
@@ -182,6 +182,12 @@ const ChartsDashboard: React.FC = () => {
           item.insured ? 'true' : 'false',
           item.purchase_date || '',
           item.purchase_cost?.toString() || '',
+          item.depreciation_y1?.toFixed(2) || '0.00',
+          item.depreciation_y2?.toFixed(2) || '0.00',
+          item.depreciation_y3?.toFixed(2) || '0.00',
+          item.depreciation_y4?.toFixed(2) || '0.00',
+          item.depreciation_y5?.toFixed(2) || '0.00',
+          item.valor_libro?.toFixed(2) || '0.00',
           item.file_url || ''
         ])
       ].map(row => row.join(',')).join('\n');
@@ -190,7 +196,7 @@ const ChartsDashboard: React.FC = () => {
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
-      link.setAttribute('download', `equipos_ti_full_${dayjs().format('YYYY-MM-DD')}.csv`);
+      link.setAttribute('download', `equipos_depreciacion_${dayjs().format('YYYY-MM-DD')}.csv`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();

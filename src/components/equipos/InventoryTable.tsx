@@ -572,14 +572,14 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
                     <span 
                       className="font-semibold"
                       style={{ color: theme.success }}
-                      title={`Tasa ${((equipo.depreciation_rate || 0) * 100).toFixed(0)}% • ${equipo.years_elapsed || 0} años transcurridos`}
+                      title={`${equipo.years_elapsed || 0} años transcurridos`}
                     >
                       ${(equipo.valor_libro || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </span>
                     <InformationCircleIcon 
                       className="h-4 w-4 cursor-help" 
                       style={{ color: theme.textSecondary }}
-                      title={`Tasa ${((equipo.depreciation_rate || 0) * 100).toFixed(0)}% • ${equipo.years_elapsed || 0} años transcurridos`}
+                      title={`${equipo.years_elapsed || 0} años transcurridos`}
                     />
                   </div>
                 </td>
