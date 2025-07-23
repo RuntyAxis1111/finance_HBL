@@ -1,19 +1,683 @@
-import { createClient } from '@supabase/supabase-js';
+import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useTheme } from '../../contexts/ThemeContext';
+import { Equipo, supabase } from '../../lib/supabaseClient';
+import {
+  PlusIcon,
+  MagnifyingGlassIcon,
+  XMarkIcon,
+  DocumentArrowUpIcon,
+  CheckIcon,
+  ExclamationTriangleIcon,
+  DocumentIcon
+  if (file.type !== 'application/pdf') {
+    throw new Error('Solo se permiten archivos PDF');
+  }
+  
+  // Validate file size (20MB limit)
+  if (file.size > 20 * 1024 * 1024) {
+    throw new Error('El archivo no puede ser mayor a 20MB');
+  }
+  
+  const fileName = `${equipoSerial}_${Date.now()}.pdf`;
+  const filePath = `facturas/${fileName}`;
+  
+  const { data, error } = await supabase.storage
+    .from('facturas')
+    .upload(filePath, file, { upsert: false });
+  
+  if (error) throw error;
+  
+  // Get public URL
+  const { data: { publicUrl } } = supabase.storage
+    .from('facturas')
+    .getPublicUrl(filePath);
+  
+  return { path: data.path, publicUrl };
+};
 
-const supabaseUrl = 'https://hqrobbmdvanuozzhjdun.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhxcm9iYm1kdmFudW96emhqZHVuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MDgyNjQ4OCwiZXhwIjoyMDY2NDAyNDg4fQ.1zNAVJPKi_l2xI5I3Xb5qEWO4CL1NTSTUAEyv9du6L4';
+export const getPublicUrl = (filePath: string) => {
+  const { data: { publicUrl } } = supabase.storage
+    .from('facturas')
+    .getPublicUrl(filePath);
+  
+  return publicUrl;
+};
+} from '@heroicons/react/24/outline';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+interface InventoryTableProps {
+  equipos: Equipo[];
+  isLoading: boolean;
+  onUpdate: (serial: string, field: keyof Equipo, value: any) => Promise<void>;
+  onCreate: (equipo: Omit<Equipo, 'created_at' | 'updated_at'>) => Promise<void>;
+  isUpdating: boolean;
+  isCreating: boolean;
+}
 
-export interface Equipo {
+interface NewEquipoForm {
   serial_number: string;
   model: 'mac_pro' | 'mac_air' | 'lenovo';
   company: 'HBL' | 'AJA';
-  assigned_to: string | null;
+  assigned_to: string;
   insured: boolean;
-  purchase_date: string | null;
-  purchase_cost: number | null;
-  created_at: string;
-  updated_at: string;
-  file_url: string | null;
+  purchase_date: string;
+  purchase_cost: string;
+  file_url: string;
 }
+
+const MODEL_LABELS = {
+  mac_air: 'Mac Air',
+  mac_pro: 'Mac Pro',
+  lenovo: 'Lenovo'
+};
+
+const InventoryTable: React.FC<InventoryTableProps> = ({
+  equipos,
+  isLoading,
+  onUpdate,
+  onCreate,
+  isUpdating,
+  isCreating
+}) => {
+  const theme = useTheme();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingCell, setEditingCell] = useState<{ serial: string; field: keyof Equipo } | null>(null);
+  const [tempValue, setTempValue] = useState('');
+  const [formData, setFormData] = useState<NewEquipoForm>({
+    serial_number: '',
+    model: 'mac_air',
+    company: 'AJA',
+    assigned_to: '',
+    insured: false,
+    purchase_date: '',
+    purchase_cost: '',
+    file_url: ''
+  });
+  const [formErrors, setFormErrors] = useState<Partial<NewEquipoForm>>({});
+
+  // Filter equipos based on search term
+  const filteredEquipos = useMemo(() => {
+    if (!searchTerm) return equipos;
+    
+    const term = searchTerm.toLowerCase();
+    return equipos.filter(equipo =>
+      equipo.serial_number.toLowerCase().includes(term) ||
+      MODEL_LABELS[equipo.model].toLowerCase().includes(term) ||
+      (equipo.assigned_to && equipo.assigned_to.toLowerCase().includes(term)) ||
+      equipo.company.toLowerCase().includes(term)
+    );
+  }, [equipos, searchTerm]);
+
+  const handleCellEdit = (serial: string, field: keyof Equipo, currentValue: any) => {
+    setEditingCell({ serial, field });
+    setTempValue(currentValue || '');
+  };
+
+  const handleCellSave = async () => {
+    if (!editingCell) return;
+    
+    try {
+      let processedValue = tempValue;
+      
+      // Process different field types
+      if (editingCell.field === 'insured') {
+        processedValue = tempValue === 'true' || tempValue === true;
+      } else if (editingCell.field === 'purchase_cost') {
+        processedValue = tempValue ? parseFloat(tempValue) : null;
+      } else if (editingCell.field === 'purchase_date') {
+        processedValue = tempValue || null;
+      }
+      
+      await onUpdate(editingCell.serial, editingCell.field, processedValue);
+      setEditingCell(null);
+      setTempValue('');
+    } catch (error) {
+      console.error('Error saving cell:', error);
+    }
+  };
+
+  const handleCellCancel = () => {
+    setEditingCell(null);
+    setTempValue('');
+  };
+
+  const validateForm = (): boolean => {
+    const errors: Partial<NewEquipoForm> = {};
+    
+    if (!formData.serial_number.trim()) {
+      errors.serial_number = 'Número de serie es requerido';
+    }
+    
+    if (!formData.model) {
+      errors.model = 'Modelo es requerido';
+    }
+    
+    if (!formData.company) {
+      errors.company = 'Empresa es requerida';
+    }
+
+    if (formData.purchase_cost && isNaN(parseFloat(formData.purchase_cost))) {
+      errors.purchase_cost = 'Costo debe ser un número válido';
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleCreateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+    
+    try {
+      const equipoData: Omit<Equipo, 'created_at' | 'updated_at'> = {
+        serial_number: formData.serial_number.trim(),
+        model: formData.model,
+        company: formData.company,
+        assigned_to: formData.assigned_to.trim() || null,
+        insured: formData.insured,
+        purchase_date: formData.purchase_date || null,
+        purchase_cost: formData.purchase_cost ? parseFloat(formData.purchase_cost) : null,
+        depr_rate: null,
+        file_url: formData.file_url || null
+      };
+      
+      await onCreate(equipoData);
+      
+      // Reset form
+      setFormData({
+        serial_number: '',
+        model: 'mac_air',
+        company: 'AJA',
+        assigned_to: '',
+        insured: false,
+        purchase_date: '',
+        purchase_cost: '',
+        file_url: ''
+      });
+      setFormErrors({});
+      setShowCreateForm(false);
+    } catch (error) {
+      console.error('Error creating equipment:', error);
+    }
+  };
+
+  const renderEditableCell = (equipo: Equipo, field: keyof Equipo, value: any) => {
+    const isEditing = editingCell?.serial === equipo.serial_number && editingCell?.field === field;
+    
+    if (isEditing) {
+      if (field === 'model') {
+        return (
+          <select
+            value={tempValue}
+            onChange={(e) => setTempValue(e.target.value)}
+            onBlur={handleCellSave}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleCellSave();
+              if (e.key === 'Escape') handleCellCancel();
+            }}
+            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2"
+            style={{
+              backgroundColor: theme.background,
+              borderColor: theme.primaryAccent,
+              color: theme.textPrimary
+            }}
+            autoFocus
+          >
+            <option value="mac_air">Mac Air</option>
+            <option value="mac_pro">Mac Pro</option>
+            <option value="lenovo">Lenovo</option>
+          </select>
+        );
+      } else if (field === 'company') {
+        return (
+          <select
+            value={tempValue}
+            onChange={(e) => setTempValue(e.target.value)}
+            onBlur={handleCellSave}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleCellSave();
+              if (e.key === 'Escape') handleCellCancel();
+            }}
+            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2"
+            style={{
+              backgroundColor: theme.background,
+              borderColor: theme.primaryAccent,
+              color: theme.textPrimary
+            }}
+            autoFocus
+          >
+            <option value="HBL">HBL</option>
+            <option value="AJA">AJA</option>
+          </select>
+        );
+      } else if (field === 'insured') {
+        return (
+          <select
+            value={tempValue.toString()}
+            onChange={(e) => setTempValue(e.target.value === 'true')}
+            onBlur={handleCellSave}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleCellSave();
+              if (e.key === 'Escape') handleCellCancel();
+            }}
+            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2"
+            style={{
+              backgroundColor: theme.background,
+              borderColor: theme.primaryAccent,
+              color: theme.textPrimary
+            }}
+            autoFocus
+          >
+            <option value="false">No</option>
+            <option value="true">Sí</option>
+          </select>
+        );
+      } else if (field === 'purchase_date') {
+        return (
+          <input
+            type="date"
+            value={tempValue}
+            onChange={(e) => setTempValue(e.target.value)}
+            onBlur={handleCellSave}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleCellSave();
+              if (e.key === 'Escape') handleCellCancel();
+            }}
+            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2"
+            style={{
+              backgroundColor: theme.background,
+              borderColor: theme.primaryAccent,
+              color: theme.textPrimary
+            }}
+            autoFocus
+          />
+        );
+      } else {
+        return (
+          <input
+            type={field === 'purchase_cost' ? 'number' : 'text'}
+            value={tempValue}
+            onChange={(e) => setTempValue(e.target.value)}
+            onBlur={handleCellSave}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleCellSave();
+              if (e.key === 'Escape') handleCellCancel();
+            }}
+            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2"
+            style={{
+              backgroundColor: theme.background,
+              borderColor: theme.primaryAccent,
+              color: theme.textPrimary
+            }}
+            autoFocus
+          />
+        );
+      }
+    }
+
+    // Display value
+    let displayValue = value;
+    if (field === 'model') {
+      displayValue = MODEL_LABELS[value as keyof typeof MODEL_LABELS] || value;
+    } else if (field === 'insured') {
+      displayValue = value ? 'Sí' : 'No';
+    } else if (field === 'purchase_cost' && value) {
+      displayValue = `$${value.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+    } else if (field === 'company') {
+      displayValue = (
+        <span 
+          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white"
+          style={{ backgroundColor: value === 'HBL' ? '#3B82F6' : '#8B5CF6' }}
+        >
+          {value}
+        </span>
+      );
+    }
+
+    return (
+      <div
+        onClick={() => handleCellEdit(equipo.serial_number, field, value)}
+        className="cursor-pointer hover:bg-opacity-50 px-2 py-1 rounded min-h-[32px] flex items-center"
+        style={{ 
+          backgroundColor: 'transparent',
+          ':hover': { backgroundColor: `${theme.primaryAccent}10` }
+        }}
+      >
+        {displayValue || '-'}
+      </div>
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="animate-pulse">
+          <div className="h-10 rounded" style={{ backgroundColor: theme.surfaceAlt }}></div>
+          <div className="mt-4 space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-16 rounded" style={{ backgroundColor: theme.surfaceAlt }}></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header with search and create button */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
+        <div className="flex items-center space-x-4">
+          <p style={{ color: theme.textSecondary }}>
+            {filteredEquipos.length} equipos en total
+          </p>
+        </div>
+        
+        <div className="flex items-center space-x-4">
+          {/* Search */}
+          <div className="relative">
+            <MagnifyingGlassIcon 
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4" 
+              style={{ color: theme.textSecondary }} 
+            />
+            <input
+              type="text"
+              placeholder="Buscar por serie, modelo o asignado..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 w-80"
+              style={{
+                backgroundColor: theme.background,
+                borderColor: theme.tableBorder,
+                color: theme.textPrimary,
+                focusRingColor: theme.primaryAccent
+              }}
+            />
+          </div>
+          
+          {/* Create button */}
+          <button
+            onClick={() => setShowCreateForm(true)}
+            className="flex items-center space-x-2 px-4 py-2 rounded-lg text-white font-medium transition-colors"
+            style={{ backgroundColor: theme.primaryAccent }}
+            disabled={isCreating}
+          >
+            <PlusIcon className="h-4 w-4" />
+            <span>Nuevo equipo</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="table-wrapper overflow-x-auto rounded-xl border" style={{ borderColor: theme.tableBorder }}>
+        <table className="data-table w-full" style={{ backgroundColor: theme.background }}>
+          <thead>
+            <tr style={{ backgroundColor: theme.tableHeaderBg }}>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
+                Número de Serie
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
+                Modelo
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
+                Empresa
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
+                Asignado a
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
+                Asegurado
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
+                Fecha de Compra
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
+                Costo de Compra
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y" style={{ divideColor: theme.tableBorder }}>
+            {filteredEquipos.map((equipo, index) => (
+              <motion.tr
+                key={equipo.serial_number}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: index * 0.05 }}
+                className="hover:bg-opacity-50"
+                style={{ 
+                  backgroundColor: index % 2 === 0 ? theme.background : theme.surfaceAlt
+                }}
+              >
+                <td className="px-4 py-3 text-sm font-medium" style={{ color: theme.textPrimary }}>
+                  {equipo.serial_number}
+                </td>
+                <td className="px-4 py-3 text-sm" style={{ color: theme.textPrimary }}>
+                  {renderEditableCell(equipo, 'model', equipo.model)}
+                </td>
+                <td className="px-4 py-3 text-sm" style={{ color: theme.textPrimary }}>
+                  {renderEditableCell(equipo, 'company', equipo.company)}
+                </td>
+                <td className="px-4 py-3 text-sm" style={{ color: theme.textPrimary }}>
+                  {renderEditableCell(equipo, 'assigned_to', equipo.assigned_to)}
+                </td>
+                <td className="px-4 py-3 text-sm" style={{ color: theme.textPrimary }}>
+                  {renderEditableCell(equipo, 'insured', equipo.insured)}
+                </td>
+                <td className="px-4 py-3 text-sm" style={{ color: theme.textPrimary }}>
+                  {renderEditableCell(equipo, 'purchase_date', equipo.purchase_date)}
+                </td>
+                <td className="px-4 py-3 text-sm" style={{ color: theme.textPrimary }}>
+                  {renderEditableCell(equipo, 'purchase_cost', equipo.purchase_cost)}
+                </td>
+              </motion.tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Create Form Modal */}
+      <AnimatePresence>
+        {showCreateForm && (
+          <motion.div
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="rounded-xl p-6 w-full max-w-md"
+              style={{ backgroundColor: theme.background }}
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-semibold" style={{ color: theme.textPrimary }}>
+                  Nuevo Equipo
+                </h3>
+                <button
+                  onClick={() => setShowCreateForm(false)}
+                  className="p-1 rounded-lg hover:bg-opacity-10"
+                  style={{ color: theme.textSecondary }}
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateSubmit} className="space-y-4">
+                {/* Serial Number */}
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: theme.textPrimary }}>
+                    Número de Serie *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.serial_number}
+                    onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+                    style={{
+                      backgroundColor: theme.background,
+                      borderColor: formErrors.serial_number ? theme.danger : theme.tableBorder,
+                      color: theme.textPrimary
+                    }}
+                    placeholder="Ej: D2K0WJ394W"
+                  />
+                  {formErrors.serial_number && (
+                    <p className="text-xs mt-1" style={{ color: theme.danger }}>
+                      {formErrors.serial_number}
+                    </p>
+                  )}
+                </div>
+
+                {/* Model */}
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: theme.textPrimary }}>
+                    Modelo *
+                  </label>
+                  <select
+                    value={formData.model}
+                    onChange={(e) => setFormData({ ...formData, model: e.target.value as any })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+                    style={{
+                      backgroundColor: theme.background,
+                      borderColor: theme.tableBorder,
+                      color: theme.textPrimary
+                    }}
+                  >
+                    <option value="mac_air">Mac Air</option>
+                    <option value="mac_pro">Mac Pro</option>
+                    <option value="lenovo">Lenovo</option>
+                  </select>
+                </div>
+
+                {/* Company */}
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: theme.textPrimary }}>
+                    Empresa *
+                  </label>
+                  <select
+                    value={formData.company}
+                    onChange={(e) => setFormData({ ...formData, company: e.target.value as any })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+                    style={{
+                      backgroundColor: theme.background,
+                      borderColor: theme.tableBorder,
+                      color: theme.textPrimary
+                    }}
+                  >
+                    <option value="HBL">HBL</option>
+                    <option value="AJA">AJA</option>
+                  </select>
+                </div>
+
+                {/* Purchase Date */}
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: theme.textPrimary }}>
+                    Fecha de Compra
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.purchase_date}
+                    onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+                    style={{
+                      backgroundColor: theme.background,
+                      borderColor: theme.tableBorder,
+                      color: theme.textPrimary
+                    }}
+                  />
+                </div>
+
+                {/* Purchase Cost */}
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: theme.textPrimary }}>
+                    Costo de Compra
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.purchase_cost}
+                    onChange={(e) => setFormData({ ...formData, purchase_cost: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+                    style={{
+                      backgroundColor: theme.background,
+                      borderColor: formErrors.purchase_cost ? theme.danger : theme.tableBorder,
+                      color: theme.textPrimary
+                    }}
+                    placeholder="25000"
+                  />
+                  {formErrors.purchase_cost && (
+                    <p className="text-xs mt-1" style={{ color: theme.danger }}>
+                      {formErrors.purchase_cost}
+                    </p>
+                  )}
+                </div>
+
+                {/* Assigned To */}
+                <div>
+                  <label className="block text-sm font-medium mb-1" style={{ color: theme.textPrimary }}>
+                    Asignado a
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.assigned_to}
+                    onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+                    style={{
+                      backgroundColor: theme.background,
+                      borderColor: theme.tableBorder,
+                      color: theme.textPrimary
+                    }}
+                    placeholder="Nombre del usuario"
+                  />
+                </div>
+
+                {/* Insured */}
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="insured"
+                    checked={formData.insured}
+                    onChange={(e) => setFormData({ ...formData, insured: e.target.checked })}
+                    className="rounded"
+                    style={{ accentColor: theme.primaryAccent }}
+                  />
+                  <label htmlFor="insured" className="text-sm" style={{ color: theme.textPrimary }}>
+                    ¿Asegurado?
+                  </label>
+                </div>
+
+                {/* Buttons */}
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateForm(false)}
+                    className="flex-1 px-4 py-2 border rounded-lg font-medium transition-colors"
+                    style={{
+                      borderColor: theme.tableBorder,
+                      color: theme.textSecondary
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isCreating}
+                    className="flex-1 px-4 py-2 rounded-lg text-white font-medium transition-colors disabled:opacity-50"
+                    style={{ backgroundColor: theme.primaryAccent }}
+                  >
+                    {isCreating ? 'Creando...' : 'Crear Equipo'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default InventoryTable;

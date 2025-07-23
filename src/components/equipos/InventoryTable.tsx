@@ -1,14 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Equipo } from '../../lib/supabaseClient';
+import { Equipo, uploadPDF } from '../../lib/supabaseClient';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
   XMarkIcon,
   DocumentArrowUpIcon,
   CheckIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  DocumentIcon
 } from '@heroicons/react/24/outline';
 
 interface InventoryTableProps {
@@ -56,11 +57,12 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
     company: 'AJA',
     assigned_to: '',
     insured: false,
-    purchase_date: '',
-    purchase_cost: '',
+    purchase_date: '2024-01-01',
+    purchase_cost: '25000',
     file_url: ''
   });
   const [formErrors, setFormErrors] = useState<Partial<NewEquipoForm>>({});
+  const [uploadingPDF, setUploadingPDF] = useState<string | null>(null);
 
   // Filter equipos based on search term
   const filteredEquipos = useMemo(() => {
@@ -122,11 +124,15 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
     if (!formData.company) {
       errors.company = 'Empresa es requerida';
     }
-
-    if (formData.purchase_cost && isNaN(parseFloat(formData.purchase_cost))) {
-      errors.purchase_cost = 'Costo debe ser un número válido';
+    
+    if (!formData.purchase_date) {
+      errors.purchase_date = 'Fecha de compra es requerida';
     }
     
+    if (!formData.purchase_cost || isNaN(parseFloat(formData.purchase_cost))) {
+      errors.purchase_cost = 'Costo de compra es requerido y debe ser un número válido';
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -143,9 +149,8 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
         company: formData.company,
         assigned_to: formData.assigned_to.trim() || null,
         insured: formData.insured,
-        purchase_date: formData.purchase_date || null,
-        purchase_cost: formData.purchase_cost ? parseFloat(formData.purchase_cost) : null,
-        depr_rate: null,
+        purchase_date: formData.purchase_date,
+        purchase_cost: parseFloat(formData.purchase_cost),
         file_url: formData.file_url || null
       };
       
@@ -158,14 +163,34 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
         company: 'AJA',
         assigned_to: '',
         insured: false,
-        purchase_date: '',
-        purchase_cost: '',
+        purchase_date: '2024-01-01',
+        purchase_cost: '25000',
         file_url: ''
       });
       setFormErrors({});
       setShowCreateForm(false);
     } catch (error) {
       console.error('Error creating equipment:', error);
+    }
+  };
+
+  const handlePDFUpload = async (equipoSerial: string, file: File) => {
+    setUploadingPDF(equipoSerial);
+    try {
+      const { publicUrl } = await uploadPDF(file, equipoSerial);
+      await onUpdate(equipoSerial, 'file_url', publicUrl);
+    } catch (error) {
+      console.error('Error uploading PDF:', error);
+      alert(`Error al subir PDF: ${(error as Error).message}`);
+    } finally {
+      setUploadingPDF(null);
+    }
+  };
+
+  const handleFileInputChange = (equipoSerial: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      handlePDFUpload(equipoSerial, file);
     }
   };
 
@@ -402,6 +427,9 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
                 Costo de Compra
               </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
+                Factura PDF
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y" style={{ divideColor: theme.tableBorder }}>
@@ -436,6 +464,60 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
                 </td>
                 <td className="px-4 py-3 text-sm" style={{ color: theme.textPrimary }}>
                   {renderEditableCell(equipo, 'purchase_cost', equipo.purchase_cost)}
+                </td>
+                <td className="px-4 py-3 text-sm" style={{ color: theme.textPrimary }}>
+                  <div className="flex items-center space-x-2">
+                    {equipo.file_url ? (
+                      <div className="flex items-center space-x-2">
+                        <a
+                          href={equipo.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center space-x-1 text-blue-600 hover:text-blue-800"
+                        >
+                          <DocumentIcon className="h-4 w-4" />
+                          <span className="text-xs">Ver PDF</span>
+                        </a>
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          onChange={(e) => handleFileInputChange(equipo.serial_number, e)}
+                          className="hidden"
+                          id={`pdf-upload-${equipo.serial_number}`}
+                        />
+                        <label
+                          htmlFor={`pdf-upload-${equipo.serial_number}`}
+                          className="cursor-pointer text-xs px-2 py-1 rounded border hover:bg-gray-50"
+                          style={{ borderColor: theme.tableBorder }}
+                        >
+                          Cambiar
+                        </label>
+                      </div>
+                    ) : (
+                      <div>
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          onChange={(e) => handleFileInputChange(equipo.serial_number, e)}
+                          className="hidden"
+                          id={`pdf-upload-${equipo.serial_number}`}
+                          disabled={uploadingPDF === equipo.serial_number}
+                        />
+                        <label
+                          htmlFor={`pdf-upload-${equipo.serial_number}`}
+                          className="cursor-pointer flex items-center space-x-1 px-3 py-1 rounded text-white text-xs font-medium disabled:opacity-50"
+                          style={{ 
+                            backgroundColor: uploadingPDF === equipo.serial_number ? theme.grey : theme.primaryAccent 
+                          }}
+                        >
+                          <DocumentArrowUpIcon className="h-4 w-4" />
+                          <span>
+                            {uploadingPDF === equipo.serial_number ? 'Subiendo...' : 'Subir PDF'}
+                          </span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
                 </td>
               </motion.tr>
             ))}
@@ -541,7 +623,7 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
                 {/* Purchase Date */}
                 <div>
                   <label className="block text-sm font-medium mb-1" style={{ color: theme.textPrimary }}>
-                    Fecha de Compra
+                    Fecha de Compra *
                   </label>
                   <input
                     type="date"
@@ -550,16 +632,21 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
                     style={{
                       backgroundColor: theme.background,
-                      borderColor: theme.tableBorder,
+                      borderColor: formErrors.purchase_date ? theme.danger : theme.tableBorder,
                       color: theme.textPrimary
                     }}
                   />
+                  {formErrors.purchase_date && (
+                    <p className="text-xs mt-1" style={{ color: theme.danger }}>
+                      {formErrors.purchase_date}
+                    </p>
+                  )}
                 </div>
 
                 {/* Purchase Cost */}
                 <div>
                   <label className="block text-sm font-medium mb-1" style={{ color: theme.textPrimary }}>
-                    Costo de Compra
+                    Costo de Compra *
                   </label>
                   <input
                     type="number"
