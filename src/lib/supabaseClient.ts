@@ -10,6 +10,10 @@ import {
   CheckIcon,
   ExclamationTriangleIcon,
   DocumentIcon
+} from '@heroicons/react/24/outline';
+
+const uploadFactura = async (file: File, equipoSerial: string) => {
+  // Validate file type
   if (file.type !== 'application/pdf') {
     throw new Error('Solo se permiten archivos PDF');
   }
@@ -43,7 +47,6 @@ export const getPublicUrl = (filePath: string) => {
   
   return publicUrl;
 };
-} from '@heroicons/react/24/outline';
 
 interface InventoryTableProps {
   equipos: Equipo[];
