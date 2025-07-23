@@ -3,7 +3,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { useTheme } from '../contexts/ThemeContext';
 import { ComputerDesktopIcon } from '@heroicons/react/24/outline';
-import { supabase, Equipo } from '../lib/supabaseClient';
+import { supabase, Equipo, getEquiposWithDepreciation } from '../lib/supabaseClient';
 import InventoryTable from '../components/equipos/InventoryTable';
 import ChartsDashboard from '../components/equipos/ChartsDashboard';
 
@@ -14,15 +14,7 @@ const LaptopInventory: React.FC = () => {
 
   const { data: equipos = [], isLoading, error, refetch } = useQuery({
     queryKey: ['equipos_ti'],
-    queryFn: async (): Promise<Equipo[]> => {
-      const { data, error } = await supabase
-        .from('equipos_ti')
-        .select('*')
-        .order('serial_number', { ascending: true });
-      
-      if (error) throw error;
-      return data || [];
-    },
+    queryFn: getEquiposWithDepreciation,
     refetchInterval: 30000,
   });
 
