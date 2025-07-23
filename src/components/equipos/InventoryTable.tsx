@@ -494,6 +494,9 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
                 Costo de Compra
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
+                % Dep. Anual
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
                 Dep. Año 1
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
@@ -510,7 +513,7 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: theme.textSecondary }}>
                 <div className="flex items-center space-x-1">
-                  <span>Valor Libro</span>
+                  <span>Valor Libro Hoy</span>
                   <InformationCircleIcon className="h-4 w-4" style={{ color: theme.textSecondary }} />
                 </div>
               </th>
@@ -552,6 +555,9 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
                 <td className="px-4 py-3 text-sm" style={{ color: theme.textPrimary }}>
                   {renderEditableCell(equipo, 'purchase_cost', equipo.purchase_cost)}
                 </td>
+                <td className="px-4 py-3 text-sm font-medium" style={{ color: theme.info }}>
+                  {((equipo.rate || 0) * 100).toFixed(0)}%
+                </td>
                 <td className="px-4 py-3 text-sm" style={{ color: theme.danger }}>
                   ${(equipo.depreciation_y1 || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </td>
@@ -572,14 +578,14 @@ const InventoryTable: React.FC<InventoryTableProps> = ({
                     <span 
                       className="font-semibold"
                       style={{ color: theme.success }}
-                      title={`Tasa ${((equipo.depreciation_rate || 0) * 100).toFixed(0)}% • ${equipo.years_elapsed || 0} años transcurridos`}
+                      title={`Valor residual hoy • ${(equipo.years_exact || 0).toFixed(1)} años transcurridos`}
                     >
-                      ${(equipo.valor_libro || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      ${(equipo.book_value_today || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </span>
                     <InformationCircleIcon 
                       className="h-4 w-4 cursor-help" 
                       style={{ color: theme.textSecondary }}
-                      title={`Tasa ${((equipo.depreciation_rate || 0) * 100).toFixed(0)}% • ${equipo.years_elapsed || 0} años transcurridos`}
+                      title={`Valor residual hoy • ${(equipo.years_exact || 0).toFixed(1)} años transcurridos`}
                     />
                   </div>
                 </td>

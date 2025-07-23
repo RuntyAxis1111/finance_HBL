@@ -17,14 +17,15 @@ export interface Equipo {
   created_at?: string;
   updated_at?: string;
   // Campos calculados de depreciación
-  valor_libro?: number;
+  book_value_today?: number;
+  rate?: number;
   depreciation_y1?: number;
   depreciation_y2?: number;
   depreciation_y3?: number;
   depreciation_y4?: number;
   depreciation_y5?: number;
   years_elapsed?: number;
-  depreciation_rate?: number;
+  years_exact?: number;
 }
 
 export interface DepreciacionData {
@@ -34,59 +35,77 @@ export interface DepreciacionData {
   book_value_end_year: number;
 }
 
-// Función para obtener equipos con datos de depreciación
+// Función para obtener equipos con datos de depreciación en tiempo real
 export const getEquiposWithDepreciation = async (): Promise<Equipo[]> => {
-  // Obtener equipos base
-  const { data: equipos, error: equiposError } = await supabase
-    .from('equipos_ti')
+  // Obtener equipos con depreciación en tiempo real
+  const { data: equiposLive, error: liveError } = await supabase
+    .from('equipos_depreciacion_live')
     .select('*')
     .order('serial_number', { ascending: true });
   
-  if (equiposError) throw equiposError;
-  if (!equipos) return [];
+  if (liveError) throw liveError;
+  if (!equiposLive) return [];
 
-  // Obtener todos los datos de depreciación de una vez usando la nueva vista v2
+  // Obtener datos adicionales de equipos_ti que no están en la vista live
+  const { data: equiposBase, error: baseError } = await supabase
+    .from('equipos_ti')
+    .select('serial_number, company, assigned_to, insured, file_url, created_at, updated_at')
+    .order('serial_number', { ascending: true });
+  
+  if (baseError) throw baseError;
+
+  // Obtener datos de depreciación por años (para columnas Año 1-5)
   const { data: depreciacionData, error: depError } = await supabase
     .from('equipos_depreciacion_v2')
-    .select('serial_number, year_number, depreciation_year, book_value_end_year, rate, residual_pct')
+    .select('serial_number, year_number, depreciation_year')
     .order('serial_number')
     .order('year_number');
   
   if (depError) throw depError;
 
-  // Combinar datos usando la nueva vista equipos_depreciacion_v2
-  return equipos.map(equipo => {
-    const equipoDepreciation = (depreciacionData || []).filter(d => d.serial_number === equipo.serial_number);
+  // Combinar todos los datos
+  return equiposLive.map(equipoLive => {
+    const equipoBase = equiposBase?.find(e => e.serial_number === equipoLive.serial_number);
+    const equipoDepreciation = (depreciacionData || []).filter(d => d.serial_number === equipoLive.serial_number);
     
-    // Calcular años transcurridos
-    const yearsElapsed = equipo.purchase_date 
-      ? Math.min(5, Math.floor((new Date().getTime() - new Date(equipo.purchase_date).getTime()) / (1000 * 60 * 60 * 24 * 365)))
+    // Calcular años transcurridos (enteros para referencia)
+    const yearsElapsed = equipoLive.purchase_date 
+      ? Math.min(5, Math.floor((new Date().getTime() - new Date(equipoLive.purchase_date).getTime()) / (1000 * 60 * 60 * 24 * 365)))
       : 0;
     
-    // Obtener valor libro actual (del año transcurrido o año 5 si es mayor)
-    const currentYear = Math.max(1, Math.min(5, yearsElapsed || 1));
-    const currentBookValue = equipoDepreciation.find(d => d.year_number === currentYear);
-    
-    // Obtener depreciaciones por año desde la nueva vista v2
+    // Obtener depreciaciones por año
     const depreciation_y1 = equipoDepreciation.find(d => d.year_number === 1)?.depreciation_year || 0;
     const depreciation_y2 = equipoDepreciation.find(d => d.year_number === 2)?.depreciation_year || 0;
     const depreciation_y3 = equipoDepreciation.find(d => d.year_number === 3)?.depreciation_year || 0;
     const depreciation_y4 = equipoDepreciation.find(d => d.year_number === 4)?.depreciation_year || 0;
     const depreciation_y5 = equipoDepreciation.find(d => d.year_number === 5)?.depreciation_year || 0;
     
-    // Obtener tasa de depreciación para el tooltip
-    const depreciationRate = equipoDepreciation.find(d => d.year_number === 1)?.rate || 0;
 
     return {
-      ...equipo,
-      valor_libro: currentBookValue?.book_value_end_year || equipo.purchase_cost || 0,
+      // Datos base del equipo
+      serial_number: equipoLive.serial_number,
+      model: equipoLive.model,
+      purchase_date: equipoLive.purchase_date,
+      purchase_cost: equipoLive.purchase_cost,
+      company: equipoBase?.company || 'AJA',
+      assigned_to: equipoBase?.assigned_to || null,
+      insured: equipoBase?.insured || false,
+      file_url: equipoBase?.file_url || null,
+      created_at: equipoBase?.created_at,
+      updated_at: equipoBase?.updated_at,
+      
+      // Datos de depreciación en tiempo real
+      rate: equipoLive.rate,
+      book_value_today: equipoLive.book_value_today,
+      years_exact: equipoLive.years_exact,
+      
+      // Depreciaciones por año (fijas)
       depreciation_y1,
       depreciation_y2,
       depreciation_y3,
       depreciation_y4,
       depreciation_y5,
-      years_elapsed: yearsElapsed,
-      depreciation_rate: depreciationRate
+      years_elapsed: yearsElapsed
     };
   });
 };

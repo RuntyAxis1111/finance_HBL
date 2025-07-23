@@ -15,7 +15,7 @@ const LaptopInventory: React.FC = () => {
   const { data: equipos = [], isLoading, error, refetch } = useQuery({
     queryKey: ['equipos_ti'],
     queryFn: getEquiposWithDepreciation,
-    refetchInterval: 30000,
+    refetchInterval: 300000, // 5 minutos para reflejar cambios diarios
   });
 
   // Real-time subscriptions

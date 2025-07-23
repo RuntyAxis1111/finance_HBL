@@ -170,9 +170,9 @@ const ChartsDashboard: React.FC = () => {
       // Create CSV content with proper headers and data formatting
       const csvContent = [
         [
-          'serial_number', 'model', 'company', 'assigned_to', 'insured', 
-          'purchase_date', 'purchase_cost', 'depreciation_y1', 'depreciation_y2', 
-          'depreciation_y3', 'depreciation_y4', 'depreciation_y5', 'valor_libro', 'file_url'
+          'serial_number', 'model', 'company', 'assigned_to', 'insured',
+          'purchase_date', 'purchase_cost', 'dep_anual_pct', 'depreciation_y1', 'depreciation_y2',
+          'depreciation_y3', 'depreciation_y4', 'depreciation_y5', 'book_value_today', 'file_url'
         ],
         ...equipos.map(item => [
           item.serial_number || '',
@@ -182,12 +182,13 @@ const ChartsDashboard: React.FC = () => {
           item.insured ? 'true' : 'false',
           item.purchase_date || '',
           item.purchase_cost?.toString() || '',
+          `${((item.rate || 0) * 100).toFixed(0)}%`,
           item.depreciation_y1?.toFixed(2) || '0.00',
           item.depreciation_y2?.toFixed(2) || '0.00',
           item.depreciation_y3?.toFixed(2) || '0.00',
           item.depreciation_y4?.toFixed(2) || '0.00',
           item.depreciation_y5?.toFixed(2) || '0.00',
-          item.valor_libro?.toFixed(2) || '0.00',
+          item.book_value_today?.toFixed(2) || '0.00',
           item.file_url || ''
         ])
       ].map(row => row.join(',')).join('\n');
