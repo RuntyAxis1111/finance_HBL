@@ -162,7 +162,7 @@ const ChartsDashboard: React.FC = () => {
 
   const downloadCSV = async () => {
     try {
-      // Get equipment data with depreciation using the function
+      // Get equipment data with depreciation using the new v2 view
       const equipos = await getEquiposWithDepreciation();
       
       if (!equipos || equipos.length === 0) return;

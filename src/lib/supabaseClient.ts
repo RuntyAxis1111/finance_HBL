@@ -24,6 +24,7 @@ export interface Equipo {
   depreciation_y4?: number;
   depreciation_y5?: number;
   years_elapsed?: number;
+  depreciation_rate?: number;
 }
 
 export interface DepreciacionData {
@@ -44,16 +45,16 @@ export const getEquiposWithDepreciation = async (): Promise<Equipo[]> => {
   if (equiposError) throw equiposError;
   if (!equipos) return [];
 
-  // Obtener todos los datos de depreciación de una vez
+  // Obtener todos los datos de depreciación de una vez usando la nueva vista v2
   const { data: depreciacionData, error: depError } = await supabase
-    .from('equipos_depreciacion')
-    .select('serial_number, year_number, depreciation_year, book_value_end_year')
+    .from('equipos_depreciacion_v2')
+    .select('serial_number, year_number, depreciation_year, book_value_end_year, rate, residual_pct')
     .order('serial_number')
     .order('year_number');
   
   if (depError) throw depError;
 
-  // Combinar datos usando la vista equipos_depreciacion
+  // Combinar datos usando la nueva vista equipos_depreciacion_v2
   return equipos.map(equipo => {
     const equipoDepreciation = (depreciacionData || []).filter(d => d.serial_number === equipo.serial_number);
     
@@ -66,12 +67,15 @@ export const getEquiposWithDepreciation = async (): Promise<Equipo[]> => {
     const currentYear = Math.max(1, Math.min(5, yearsElapsed || 1));
     const currentBookValue = equipoDepreciation.find(d => d.year_number === currentYear);
     
-    // Obtener depreciaciones por año desde la vista
+    // Obtener depreciaciones por año desde la nueva vista v2
     const depreciation_y1 = equipoDepreciation.find(d => d.year_number === 1)?.depreciation_year || 0;
     const depreciation_y2 = equipoDepreciation.find(d => d.year_number === 2)?.depreciation_year || 0;
     const depreciation_y3 = equipoDepreciation.find(d => d.year_number === 3)?.depreciation_year || 0;
     const depreciation_y4 = equipoDepreciation.find(d => d.year_number === 4)?.depreciation_year || 0;
     const depreciation_y5 = equipoDepreciation.find(d => d.year_number === 5)?.depreciation_year || 0;
+    
+    // Obtener tasa de depreciación para el tooltip
+    const depreciationRate = equipoDepreciation.find(d => d.year_number === 1)?.rate || 0;
 
     return {
       ...equipo,
@@ -81,7 +85,8 @@ export const getEquiposWithDepreciation = async (): Promise<Equipo[]> => {
       depreciation_y3,
       depreciation_y4,
       depreciation_y5,
-      years_elapsed: yearsElapsed
+      years_elapsed: yearsElapsed,
+      depreciation_rate: depreciationRate
     };
   });
 };
